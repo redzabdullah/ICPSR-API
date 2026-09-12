@@ -1,0 +1,95 @@
+{
+  "_comment": "Sample queries adapted from the ICPSR Object-Export API User Guide (Section III).",
+
+  "all_studies": {
+    "format": "http://www.w3.org/ns/dcat#",
+    "ext": "zip",
+    "query": {
+      "select": ["study"],
+      "from": "pcms",
+      "where": [
+        {
+          "productType": "study",
+          "attribute": "dateIssued",
+          "op": "lt",
+          "value": "3000-01-01"
+        }
+      ]
+    }
+  },
+
+  "single_identifier": {
+    "format": "http://www.w3.org/ns/dcat#",
+    "ext": "zip",
+    "query": {
+      "select": ["study", "series", "dataset"],
+      "from": "pcms",
+      "where": [
+        {
+          "productType": "study",
+          "attribute": "identifier",
+          "op": "in",
+          "value": ["5512"]
+        }
+      ]
+    }
+  },
+
+  "africa_dsdr_since_2020": {
+    "format": "http://www.w3.org/ns/dcat#",
+    "ext": "zip",
+    "query": {
+      "select": ["study"],
+      "from": "pcms",
+      "where": [
+        {
+          "productType": "study",
+          "attribute": "ownerArchive",
+          "op": "in",
+          "value": ["DSDR"]
+        },
+        {
+          "productType": "study",
+          "attribute": "geographicArea",
+          "op": "contains",
+          "value": ["africa"]
+        },
+        {
+          "productType": "study",
+          "attribute": "dateIssued",
+          "op": "gt",
+          "value": "2020-01-01"
+        }
+      ]
+    }
+  },
+
+  "nacjd_addiction_since_2020": {
+    "format": "http://www.loc.gov/MARC21/slim",
+    "ext": "zip",
+    "query": {
+      "select": ["study"],
+      "from": "pcms",
+      "where": [
+        {
+          "productType": "study",
+          "attribute": "ownerArchive",
+          "op": "contains",
+          "value": ["NACJD"]
+        },
+        {
+          "productType": "study",
+          "attribute": "dateIssued",
+          "op": "gte",
+          "value": "2020-01-01"
+        },
+        {
+          "productType": "study",
+          "attribute": "subjectTerm",
+          "op": "in",
+          "value": ["addiction"]
+        }
+      ]
+    }
+  }
+}
