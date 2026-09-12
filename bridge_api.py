@@ -45,6 +45,7 @@ app = FastAPI(
     title="ICPSR Search Bridge",
     description="Plain-language search over the ICPSR Object-Export API, for use as a ChatGPT Action.",
     version="1.0.0",
+    servers=[{"url": "https://icpsr-api.onrender.com"}],
 )
 
 
