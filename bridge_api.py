@@ -76,6 +76,13 @@ class StudyResult(BaseModel):
     modified: Optional[str] = None
     spatial: Optional[str] = None
     landingPage: Optional[str] = None
+    documentation_links: Optional[list[str]] = Field(
+        None,
+        description="Direct links to ICPSR documentation/codebook files for this study, "
+                    "where survey question wording and variable definitions actually live. "
+                    "Present these to the user as 'you can open the full codebook here' -- "
+                    "do not claim to have read their contents.",
+    )
 
 
 def verify_key(x_bridge_key: str = Header(...)) -> None:
@@ -139,7 +146,7 @@ def search(req: SearchRequest, _: None = Depends(verify_key)):
     payload = {
         "format": "http://www.w3.org/ns/dcat#",
         "ext": "zip",
-        "query": {"select": ["study"], "from": "pcms", "where": where},
+        "query": {"select": ["study", "series", "dataset"], "from": "pcms", "where": where},
     }
 
     client = ICPSRClient()
@@ -173,8 +180,25 @@ def search(req: SearchRequest, _: None = Depends(verify_key)):
             modified=r.get("modified"),
             spatial=r.get("spatial"),
             landingPage=r.get("landingPage"),
+            documentation_links=extract_documentation_links(r),
         )
         for r in records[: req.max_results]
     ]
 
     return results
+
+
+def extract_documentation_links(record: dict) -> list[str]:
+    """
+    Pull real documentation/codebook URLs out of a DCAT-US record's
+    'distribution' array (the 'describedBy' field), skipping entries
+    that only repeat the study's landing page/DOI with no actual doc.
+    This is where survey question wording and variable definitions
+    live -- NOT in this API's own metadata.
+    """
+    links: list[str] = []
+    for dist in record.get("distribution", []) or []:
+        described_by = dist.get("describedBy")
+        if described_by and described_by not in links:
+            links.append(described_by)
+    return links
