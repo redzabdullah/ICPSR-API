@@ -31,6 +31,7 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Any, Optional
+from urllib.parse import quote_plus
 
 import requests
 from dotenv import load_dotenv
@@ -137,8 +138,7 @@ class ICPSRClient:
             # intermediary (proxy/VPN/TLS inspection) rather than the
             # real ICPSR gateway. Redact anything that looks like the
             # secret before showing the body.
-            body_preview = resp.text[:500]
-            body_preview = body_preview.replace(self.config.api_secret, "[REDACTED]")
+            body_preview = self._redact_credentials(resp.text[:500])
             raise ICPSRAPIError(
                 f"Token endpoint returned HTTP {resp.status_code} with "
                 f"Content-Type '{content_type}' (expected application/json). "
@@ -238,10 +238,20 @@ class ICPSRClient:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    @staticmethod
-    def _raise_for_error(resp: requests.Response) -> None:
+    def _redact_credentials(self, text: str) -> str:
+        """Remove API credentials, including URL-encoded forms, from errors."""
+        redacted = text
+        for credential in (self.config.api_key, self.config.api_secret):
+            if credential:
+                redacted = redacted.replace(credential, "[REDACTED]")
+                redacted = redacted.replace(quote_plus(credential), "[REDACTED]")
+        return redacted
+
+    def _raise_for_error(self, resp: requests.Response) -> None:
         try:
             detail = resp.json()
         except ValueError:
             detail = resp.text
-        raise ICPSRAPIError(f"HTTP {resp.status_code}: {detail}")
+        raise ICPSRAPIError(
+            self._redact_credentials(f"HTTP {resp.status_code}: {detail}")
+        )

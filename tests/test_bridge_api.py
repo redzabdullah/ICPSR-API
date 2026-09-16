@@ -9,8 +9,10 @@ from bridge_api import (
     SearchRequest,
     build_where_clauses,
     extract_documentation_links,
+    search,
     verify_key,
 )
+from src.icpsr_client import ICPSRAPIError
 
 
 class BridgeAPITests(unittest.TestCase):
@@ -56,6 +58,22 @@ class BridgeAPITests(unittest.TestCase):
             extract_documentation_links(record),
             ["https://example.test/codebook"],
         )
+
+    def test_icpsr_error_response_contains_no_credentials(self):
+        api_key = "client-key-sensitive"
+        api_secret = "client-secret-sensitive"
+        safe_error = ICPSRAPIError(
+            "upstream rejected client_id=[REDACTED] and client_secret=[REDACTED]"
+        )
+        with patch("bridge_api.ICPSRClient") as client_class:
+            client_class.return_value.run_query.side_effect = safe_error
+            with self.assertRaises(HTTPException) as error:
+                search(SearchRequest(identifiers=["5512"]), None)
+
+        response_body = str(error.exception.detail)
+        self.assertEqual(error.exception.status_code, 502)
+        self.assertNotIn(api_key, response_body)
+        self.assertNotIn(api_secret, response_body)
 
 
 if __name__ == "__main__":
