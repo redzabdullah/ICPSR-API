@@ -30,6 +30,7 @@ Deploy on Render:
 from __future__ import annotations
 
 import os
+import secrets
 import tempfile
 from datetime import date
 from pathlib import Path
@@ -95,7 +96,7 @@ class StudyResult(BaseModel):
 
 def verify_key(x_bridge_key: str = Header(...)) -> None:
     expected = os.getenv("BRIDGE_API_KEY")
-    if not expected or x_bridge_key != expected:
+    if not expected or not secrets.compare_digest(x_bridge_key, expected):
         raise HTTPException(status_code=401, detail="Invalid or missing X-Bridge-Key header")
 
 

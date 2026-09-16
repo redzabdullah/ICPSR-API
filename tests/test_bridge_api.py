@@ -47,6 +47,16 @@ class BridgeAPITests(unittest.TestCase):
             self.assertIsNone(verify_key("expected"))
             with self.assertRaises(HTTPException):
                 verify_key("wrong")
+            with self.assertRaises(HTTPException):
+                verify_key("expectez")  # Same length as the correct key.
+
+    def test_bridge_key_uses_constant_time_comparison(self):
+        with (
+            patch.dict(os.environ, {"BRIDGE_API_KEY": "expected"}),
+            patch("bridge_api.secrets.compare_digest", return_value=True) as compare,
+        ):
+            self.assertIsNone(verify_key("provided"))
+        compare.assert_called_once_with("provided", "expected")
 
     def test_documentation_links_are_unique(self):
         record = {"distribution": [
