@@ -49,6 +49,13 @@ class ICPSRClientRedactionTests(unittest.TestCase):
 
         self.assert_credentials_redacted(str(error.exception))
 
+    def test_non_secret_defaults_match_working_gateway_configuration(self):
+        config = ICPSRConfig(api_key="key", api_secret="secret")
+        self.assertEqual(config.gateway_url, "https://gw.api.it.umich.edu")
+        self.assertEqual(config.api_path, "icpsr/objectexport")
+        self.assertEqual(config.oauth_path, "um/oauth2/token")
+        self.assertEqual(config.scope, "icpsr-objectexport")
+
 
 if __name__ == "__main__":
     unittest.main()

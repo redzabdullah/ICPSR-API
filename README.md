@@ -32,7 +32,7 @@ Once approved, fill in `.env` with:
 Reverse-engineered from ICPSR's public Postman collection ("Public
 Object Export Toolkit" → collection-level Scripts → Before request):
 
-- Token endpoint: `POST {gateway_url}/um/oauth2/tokens`
+- Token endpoint: `POST {gateway_url}/um/oauth2/token`
 - `Content-Type: application/x-www-form-urlencoded`
 - Body: `grant_type=client_credentials&client_id=<api_key>&client_secret=<api_secret>&scope=icpsr-objectexport`
 - Response: `{ access_token, token_type: "Bearer", expires_in, scope, client_id }`

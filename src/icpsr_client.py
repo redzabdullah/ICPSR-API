@@ -14,7 +14,7 @@ Two-step async flow described in the guide:
             download the ZIP of metadata records.
 
 AUTH (confirmed from the Postman collection's pre-request script):
-  Token endpoint: {gateway_url}/um/oauth2/tokens
+  Token endpoint: {gateway_url}/um/oauth2/token
   Method: POST, Content-Type: application/x-www-form-urlencoded
   Body: grant_type=client_credentials, client_id=<api_key>,
         client_secret=<api_secret>, scope=icpsr-objectexport
@@ -51,7 +51,7 @@ class ICPSRConfig:
     api_secret: str
     gateway_url: str = "https://gw.api.it.umich.edu"
     api_path: str = "icpsr/objectexport"
-    oauth_path: str = "um/oauth2/tokens"
+    oauth_path: str = "um/oauth2/token"
     scope: str = "icpsr-objectexport"
     request_timeout_seconds: float = 30.0
 
@@ -107,7 +107,7 @@ class ICPSRClient:
     def _get_oauth_token(self) -> str:
         """
         Return a cached token if still valid, otherwise fetch a new one
-        from {gateway_url}/um/oauth2/tokens via the client-credentials
+        from {gateway_url}/um/oauth2/token via the client-credentials
         grant. Mirrors the Postman collection's own 10-second early
         expiry buffer to avoid race conditions.
         """
