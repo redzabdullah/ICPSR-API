@@ -33,7 +33,7 @@ def load_queries() -> dict:
 
 def download_zip(location_url: str, outfile: Path) -> None:
     outfile.parent.mkdir(parents=True, exist_ok=True)
-    resp = requests.get(location_url, stream=True)
+    resp = requests.get(location_url, stream=True, timeout=60)
     resp.raise_for_status()
     with open(outfile, "wb") as f:
         for chunk in resp.iter_content(chunk_size=8192):

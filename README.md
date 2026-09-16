@@ -1,12 +1,15 @@
 # icpsr-api-project
 
-Scaffold for working with the [ICPSR Object-Export API](https://www.icpsr.umich.edu/),
+Tools for working with the [ICPSR Object-Export API](https://www.icpsr.umich.edu/),
 built from the *ICPSR Object-Export API User Guide* (last updated June 2026).
 
-## Status: waiting on API approval
+## Status: working prototype
 
-This is set up so you can start writing/testing logic now and just drop
-in real credentials once your UM API Directory app is approved.
+The OAuth, asynchronous export, ZIP download, DCAT-US parsing, and CSV
+conversion flow has been exercised with ICPSR study 5512. A FastAPI bridge
+also exposes simplified searches for a ChatGPT Custom GPT Action. MARCXML and
+Dublin Core parsing have fixture coverage but should still be checked against
+larger real exports.
 
 ## Setup
 
@@ -22,6 +25,7 @@ Once approved, fill in `.env` with:
   your App in the UM API Directory (see Section I of the guide).
 - Confirm `ICPSR_GATEWAY_URL` / `ICPSR_API_PATH` against the real
   Postman collection's `{{gateway_url}}` / `{{api_path}}` variables.
+- Set `BRIDGE_API_KEY` to a long random value if running the web bridge.
 
 ## Auth (confirmed)
 
@@ -56,6 +60,33 @@ from src.parse_metadata import unzip_export, parse_export
 
 files = unzip_export(Path("data/raw/all_studies.zip"), Path("data/processed/all_studies"))
 records = parse_export(files)
+```
+
+To flatten an export into CSV:
+
+```bash
+python src/to_table.py --zip data/raw/single_identifier.zip
+```
+
+## Web bridge
+
+Run locally with:
+
+```bash
+uvicorn bridge_api:app --reload
+```
+
+`GET /health` is public. `POST /search` requires an `X-Bridge-Key` header
+matching `BRIDGE_API_KEY`. Interactive OpenAPI documentation is available at
+`/docs` while the service is running.
+
+## Tests
+
+The test suite uses only local fixtures and does not call ICPSR or read real
+credentials:
+
+```bash
+python -m unittest discover -s tests -v
 ```
 
 ## Notes from the guide worth remembering

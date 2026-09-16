@@ -29,11 +29,13 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import requests
 from dotenv import load_dotenv
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 load_dotenv()
 
@@ -48,8 +50,9 @@ class ICPSRConfig:
     api_secret: str
     gateway_url: str = "https://gw.api.it.umich.edu"
     api_path: str = "icpsr/objectexport"
-    oauth_path: str = "um/oauth2/token"
+    oauth_path: str = "um/oauth2/tokens"
     scope: str = "icpsr-objectexport"
+    request_timeout_seconds: float = 30.0
 
     @classmethod
     def from_env(cls) -> "ICPSRConfig":
@@ -67,6 +70,9 @@ class ICPSRConfig:
             api_path=os.getenv("ICPSR_API_PATH", cls.api_path),
             oauth_path=os.getenv("ICPSR_OAUTH_PATH", cls.oauth_path),
             scope=os.getenv("ICPSR_OAUTH_SCOPE", cls.scope),
+            request_timeout_seconds=float(
+                os.getenv("ICPSR_REQUEST_TIMEOUT_SECONDS", cls.request_timeout_seconds)
+            ),
         )
 
 
@@ -74,6 +80,17 @@ class ICPSRClient:
     def __init__(self, config: Optional[ICPSRConfig] = None):
         self.config = config or ICPSRConfig.from_env()
         self.session = requests.Session()
+        retries = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            backoff_factor=0.5,
+            status_forcelist=(429, 500, 502, 503, 504),
+            # Only retry idempotent polling requests. Retrying an export POST
+            # could create duplicate jobs if the first response were lost.
+            allowed_methods=frozenset({"GET"}),
+        )
+        self.session.mount("https://", HTTPAdapter(max_retries=retries))
         self._base_url = f"{self.config.gateway_url}/{self.config.api_path}"
         self._token: Optional[str] = None
         self._token_expires_at: float = 0.0
@@ -111,6 +128,7 @@ class ICPSRClient:
                 "client_secret": self.config.api_secret,
                 "scope": self.config.scope,
             },
+            timeout=self.config.request_timeout_seconds,
         )
 
         content_type = resp.headers.get("Content-Type", "")
@@ -156,7 +174,9 @@ class ICPSRClient:
         """
         url = f"{self._base_url}/export_requests"
         headers = {"Content-Type": "application/json", **self._build_auth_headers()}
-        resp = self.session.post(url, json=payload, headers=headers)
+        resp = self.session.post(
+            url, json=payload, headers=headers, timeout=self.config.request_timeout_seconds
+        )
 
         if resp.status_code != 201:
             self._raise_for_error(resp)
@@ -172,7 +192,7 @@ class ICPSRClient:
     def get_export_result(self, export_id: str) -> dict[str, Any]:
         url = f"{self._base_url}/export_requests/{export_id}"
         headers = self._build_auth_headers()
-        resp = self.session.get(url, headers=headers)
+        resp = self.session.get(url, headers=headers, timeout=self.config.request_timeout_seconds)
 
         if resp.status_code >= 400:
             self._raise_for_error(resp)

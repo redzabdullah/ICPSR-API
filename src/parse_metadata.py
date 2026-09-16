@@ -28,11 +28,19 @@ DC_NS = {"dc": "http://purl.org/dc/elements/1.1/", "dcterms": "http://purl.org/d
 
 
 def unzip_export(zip_path: Path, extract_to: Path) -> list[Path]:
-    """Extract a downloaded export ZIP and return the list of extracted files."""
+    """Safely extract an export ZIP and return the extracted files."""
     extract_to.mkdir(parents=True, exist_ok=True)
+    destination = extract_to.resolve()
     with zipfile.ZipFile(zip_path, "r") as z:
-        z.extractall(extract_to)
-        return [extract_to / name for name in z.namelist() if not name.endswith("/")]
+        files: list[Path] = []
+        for info in z.infolist():
+            target = (extract_to / info.filename).resolve()
+            if target != destination and destination not in target.parents:
+                raise ValueError(f"Unsafe path in ZIP archive: {info.filename!r}")
+            if not info.is_dir():
+                z.extract(info, extract_to)
+                files.append(target)
+        return files
 
 
 def parse_dcat_us(json_path: Path) -> list[dict[str, Any]]:
@@ -55,12 +63,20 @@ def parse_marcxml(xml_path: Path) -> list[dict[str, Any]]:
     records = []
     for record_el in tree.findall(".//marc:record", MARC_NS):
         record: dict[str, Any] = {}
+        leader = record_el.find("marc:leader", MARC_NS)
+        if leader is not None and leader.text:
+            record["leader"] = leader.text
+        for controlfield in record_el.findall("marc:controlfield", MARC_NS):
+            tag = controlfield.get("tag")
+            if tag and controlfield.text is not None:
+                record.setdefault(f"control_{tag}", []).append(controlfield.text)
         for datafield in record_el.findall("marc:datafield", MARC_NS):
             tag = datafield.get("tag")
             for subfield in datafield.findall("marc:subfield", MARC_NS):
                 code = subfield.get("code")
                 key = f"{tag}_{code}"
-                record.setdefault(key, []).append(subfield.text)
+                if subfield.text is not None:
+                    record.setdefault(key, []).append(subfield.text)
         records.append(record)
     return records
 
@@ -69,8 +85,8 @@ def parse_dublin_core(xml_path: Path) -> list[dict[str, Any]]:
     """Flatten Dublin Core <dc:*> / <dcterms:*> elements per record."""
     tree = etree.parse(str(xml_path))
     records = []
-    # Adjust the record-level XPath once you see a real export's root structure.
-    for record_el in tree.findall(".//record") or [tree.getroot()]:
+    record_elements = tree.xpath("//*[local-name()='record']")
+    for record_el in record_elements or [tree.getroot()]:
         record: dict[str, Any] = {}
         for el in record_el.iter():
             local_tag = etree.QName(el).localname

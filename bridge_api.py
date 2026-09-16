@@ -31,12 +31,13 @@ from __future__ import annotations
 
 import os
 import tempfile
+from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import requests
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.icpsr_client import ICPSRAPIError, ICPSRClient
 from src.parse_metadata import parse_export, unzip_export
@@ -59,13 +60,19 @@ class SearchRequest(BaseModel):
     owner_archive: Optional[str] = Field(
         None, description="Specific ICPSR archive code if known, e.g. NACJD, DSDR, NAHDAP"
     )
-    date_from: Optional[str] = Field(None, description="Earliest release date, format YYYY-MM-DD")
-    date_to: Optional[str] = Field(None, description="Latest release date, format YYYY-MM-DD")
-    date_field: str = Field(
+    date_from: Optional[date] = Field(None, description="Earliest release date, format YYYY-MM-DD")
+    date_to: Optional[date] = Field(None, description="Latest release date, format YYYY-MM-DD")
+    date_field: Literal["dateIssued", "dateModified"] = Field(
         "dateIssued",
         description="Which date to filter on: 'dateIssued' (original release) or 'dateModified' (last updated)",
     )
     max_results: int = Field(20, ge=1, le=100, description="Cap on number of studies returned")
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "SearchRequest":
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from must be on or before date_to")
+        return self
 
 
 class StudyResult(BaseModel):
@@ -122,12 +129,14 @@ def build_where_clauses(req: SearchRequest) -> list[dict]:
     if req.date_from and req.date_to:
         where.append({
             "productType": "study", "attribute": req.date_field,
-            "op": "between", "value": {"start": req.date_from, "end": req.date_to},
+            "op": "between", "value": {
+                "start": req.date_from.isoformat(), "end": req.date_to.isoformat()
+            },
         })
     elif req.date_from:
-        where.append({"productType": "study", "attribute": req.date_field, "op": "gte", "value": req.date_from})
+        where.append({"productType": "study", "attribute": req.date_field, "op": "gte", "value": req.date_from.isoformat()})
     elif req.date_to:
-        where.append({"productType": "study", "attribute": req.date_field, "op": "lte", "value": req.date_to})
+        where.append({"productType": "study", "attribute": req.date_field, "op": "lte", "value": req.date_to.isoformat()})
 
     if not where:
         raise HTTPException(status_code=400, detail="At least one search field is required.")
@@ -162,8 +171,11 @@ def search(req: SearchRequest, _: None = Depends(verify_key)):
     if not location:
         return []
 
-    resp = requests.get(location)
-    resp.raise_for_status()
+    try:
+        resp = requests.get(location, timeout=60)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Failed to download ICPSR export: {e}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         zip_path = Path(tmpdir) / "export.zip"
