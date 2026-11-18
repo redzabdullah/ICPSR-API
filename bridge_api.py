@@ -25,7 +25,7 @@ Run locally:
     uvicorn bridge_api:app --reload
 
 Deploy on Render:
-    Start command: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT
+    Start command: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT --no-access-log
     Env vars: ICPSR_API_KEY, ICPSR_API_SECRET, BRIDGE_API_KEY, MCP_PATH_TOKEN
     (ICPSR_GATEWAY_URL / ICPSR_API_PATH / ICPSR_OAUTH_PATH / ICPSR_OAUTH_SCOPE
      are optional -- they default correctly in icpsr_client.py)
@@ -150,16 +150,11 @@ def build_where_clauses(req: SearchRequest) -> list[dict]:
     if req.owner_archive:
         where.append({"productType": "study", "attribute": "ownerArchive", "op": "in", "value": [req.owner_archive]})
 
-    if req.date_from and req.date_to:
-        where.append({
-            "productType": "study", "attribute": req.date_field,
-            "op": "between", "value": {
-                "start": req.date_from.isoformat(), "end": req.date_to.isoformat()
-            },
-        })
-    elif req.date_from:
+    # ICPSR rejects a "between" operator, so a date range is sent as two
+    # separate where objects (separate conditions are AND'd together).
+    if req.date_from:
         where.append({"productType": "study", "attribute": req.date_field, "op": "gte", "value": req.date_from.isoformat()})
-    elif req.date_to:
+    if req.date_to:
         where.append({"productType": "study", "attribute": req.date_field, "op": "lte", "value": req.date_to.isoformat()})
 
     if not where:
