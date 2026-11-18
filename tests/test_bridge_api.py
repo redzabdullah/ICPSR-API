@@ -27,9 +27,10 @@ class BridgeAPITests(unittest.TestCase):
         self.assertEqual(clauses[0]["attribute"], "identifier")
         self.assertEqual(clauses[1]["op"], "contains")
         self.assertEqual(
-            clauses[2]["value"],
-            {"start": "2020-01-01", "end": "2021-12-31"},
+            [(c["op"], c["value"]) for c in clauses[2:]],
+            [("gte", "2020-01-01"), ("lte", "2021-12-31")],
         )
+        self.assertNotIn("between", [c["op"] for c in clauses])
 
     def test_rejects_invalid_date_field_and_range(self):
         with self.assertRaises(ValidationError):

@@ -25,7 +25,7 @@ Run locally:
     uvicorn bridge_api:app --reload
 
 Deploy on Render:
-    Start command: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT --no-access-log
+    Start command: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT
     Env vars: ICPSR_API_KEY, ICPSR_API_SECRET, BRIDGE_API_KEY, MCP_PATH_TOKEN
     (ICPSR_GATEWAY_URL / ICPSR_API_PATH / ICPSR_OAUTH_PATH / ICPSR_OAUTH_SCOPE
      are optional -- they default correctly in icpsr_client.py)
