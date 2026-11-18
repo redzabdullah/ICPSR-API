@@ -17,18 +17,24 @@ Auth: every request must include header `X-Bridge-Key` matching the
 BRIDGE_API_KEY environment variable, so this public endpoint can't be
 used to burn your ICPSR API quota by anyone who finds the URL.
 
+ChatGPT plugins (which replaced Custom GPTs) cannot use this REST Action;
+they connect to the MCP endpoint added by mcp_server.py instead, served
+from this same app at /mcp/<MCP_PATH_TOKEN>.
+
 Run locally:
     uvicorn bridge_api:app --reload
 
 Deploy on Render:
-    Start command: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT
-    Env vars: ICPSR_API_KEY, ICPSR_API_SECRET, BRIDGE_API_KEY
+    Start command: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT --no-access-log
+    Env vars: ICPSR_API_KEY, ICPSR_API_SECRET, BRIDGE_API_KEY, MCP_PATH_TOKEN
     (ICPSR_GATEWAY_URL / ICPSR_API_PATH / ICPSR_OAUTH_PATH / ICPSR_OAUTH_SCOPE
      are optional -- they default correctly in icpsr_client.py)
 """
 
 from __future__ import annotations
 
+import contextlib
+import logging
 import os
 import secrets
 import tempfile
@@ -43,7 +49,24 @@ from pydantic import BaseModel, Field, model_validator
 from src.icpsr_client import ICPSRAPIError, ICPSRClient
 from src.parse_metadata import parse_export, unzip_export
 
+logger = logging.getLogger(__name__)
+
+# Set at the bottom of this module once run_search exists (see mount_mcp).
+_mcp_server = None
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # The MCP streamable-HTTP transport needs its session manager running.
+    if _mcp_server is None:
+        yield
+        return
+    async with _mcp_server.session_manager.run():
+        yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="ICPSR Search Bridge",
     description="Plain-language search over the ICPSR Object-Export API, for use as a ChatGPT Action.",
     version="1.0.0",
@@ -152,6 +175,15 @@ def health():
 
 @app.post("/search", response_model=list[StudyResult])
 def search(req: SearchRequest, _: None = Depends(verify_key)):
+    return run_search(req)
+
+
+def run_search(req: SearchRequest) -> list[StudyResult]:
+    """
+    Core search used by both the REST /search route (old Custom GPT
+    Action) and the MCP tool (ChatGPT plugin). Raises HTTPException on
+    bad input or upstream failure.
+    """
     where = build_where_clauses(req)
 
     payload = {
@@ -216,3 +248,25 @@ def extract_documentation_links(record: dict) -> list[str]:
         if described_by and described_by not in links:
             links.append(described_by)
     return links
+
+
+def mount_mcp(target: FastAPI) -> bool:
+    """
+    Mount the MCP endpoint at /mcp/<MCP_PATH_TOKEN> for ChatGPT plugins.
+    Does nothing (fails closed) if MCP_PATH_TOKEN is unset or too short.
+    """
+    global _mcp_server
+    from mcp_server import create_mcp, get_mcp_path_token
+
+    token = get_mcp_path_token()
+    if not token:
+        logger.warning("MCP_PATH_TOKEN missing or shorter than 32 chars; MCP endpoint disabled.")
+        return False
+    _mcp_server = create_mcp(run_search, SearchRequest, token)
+    # Mounted at "/" so FastAPI's own routes (/health, /search, /docs) match
+    # first; the MCP app only answers its exact secret path.
+    target.mount("/", _mcp_server.streamable_http_app())
+    return True
+
+
+mount_mcp(app)

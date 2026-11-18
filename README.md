@@ -80,6 +80,29 @@ uvicorn bridge_api:app --reload
 matching `BRIDGE_API_KEY`. Interactive OpenAPI documentation is available at
 `/docs` while the service is running.
 
+## ChatGPT plugin (MCP endpoint)
+
+Custom GPTs retire on 11 Dec 2026. Migrating a GPT to a plugin carries over
+its instructions and knowledge files, but **not Custom Actions**, so the
+old `POST /search` Action does not reach the plugin. `mcp_server.py` exposes
+the same search as an MCP tool (`search_icpsr_studies`, read-only) from this
+same app.
+
+1. Generate a token: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+2. Add it to Render as `MCP_PATH_TOKEN` (Environment tab) and redeploy.
+   Set the Start Command to
+   `uvicorn bridge_api:app --host 0.0.0.0 --port $PORT --no-access-log`
+   so Uvicorn does not write the secret URL path to the service logs.
+3. In ChatGPT: Plugins → + → **Add custom MCP server**.
+   Server URL: `https://icpsr-api.onrender.com/mcp/<MCP_PATH_TOKEN>`,
+   Authentication: **No authentication** (the secret path is the key —
+   ChatGPT cannot send `X-Bridge-Key`). Create, then install the plugin.
+4. Attach it to the migrated plugin, or test with `@ICPSR Data Search`.
+
+Treat the full URL like a password; rotate the token if it leaks. The REST
+`/search` route and `X-Bridge-Key` are unchanged. Render's free tier sleeps
+after inactivity, and the first call can take ~30–60 s to wake.
+
 ## Tests
 
 The test suite uses only local fixtures and does not call ICPSR or read real

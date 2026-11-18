@@ -1,1 +1,1 @@
-web: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT
+web: uvicorn bridge_api:app --host 0.0.0.0 --port $PORT --no-access-log
