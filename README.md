@@ -1,4 +1,5 @@
-# icpsr-api-project
+# ICPSR API Toolkit for Research Data Discovery
+Developed by Redzuan Abdullah
 
 Tools for working with the [ICPSR Object-Export API](https://www.icpsr.umich.edu/),
 built from the *ICPSR Object-Export API User Guide* (last updated June 2026).
